@@ -1130,16 +1130,39 @@ window.generateShareLink = () => {
         showToast('請先加入幣別後再產生分享連結');
         return;
     }
+    
+    const shareBtn = document.getElementById('shareBtn');
+    let originalBtnHtml = '';
+    let originalDisabled = false;
+    
+    if (shareBtn) {
+        originalBtnHtml = shareBtn.innerHTML;
+        originalDisabled = shareBtn.disabled;
+        shareBtn.disabled = true;
+        const textSpan = shareBtn.querySelector('span');
+        if (textSpan) textSpan.innerText = '正在複製...';
+    }
+    
     try {
-        const jsonStr = JSON.stringify(selectedCurrencies);
+        // 1. 資料本體壓縮 (Local Compression)
+        const compactData = selectedCurrencies.map(item => [
+            item.name,
+            item.ratio,
+            item.rate,
+            item.account || '',
+            item.scores
+        ]);
+        
+        const jsonStr = JSON.stringify(compactData);
         const base64Str = btoa(unescape(encodeURIComponent(jsonStr)));
         const baseUrl = window.location.href.split('#')[0];
         const shareUrl = `${baseUrl}#share=${base64Str}`;
         
+        // 2. 複製到剪貼簿 (優先採用標準 API，相容 file:// 降級)
         navigator.clipboard.writeText(shareUrl).then(() => {
-            showToast('分享連結已複製到剪貼簿，快傳給其他人吧！');
+            showToast('分享連結已複製到剪貼簿！');
         }).catch(err => {
-            console.error('無法複製連結:', err);
+            console.warn('Clipboard API 被瀏覽器阻擋，改用模擬選取複製方式:', err);
             const input = document.createElement('input');
             input.value = shareUrl;
             document.body.appendChild(input);
@@ -1147,10 +1170,20 @@ window.generateShareLink = () => {
             document.execCommand('copy');
             document.body.removeChild(input);
             showToast('分享連結已複製！');
+        }).finally(() => {
+            if (shareBtn) {
+                shareBtn.disabled = originalDisabled;
+                shareBtn.innerHTML = originalBtnHtml;
+            }
         });
+        
     } catch (e) {
         console.error('產生分享連結失敗:', e);
         showToast('產生分享連結失敗，請重試');
+        if (shareBtn) {
+            shareBtn.disabled = originalDisabled;
+            shareBtn.innerHTML = originalBtnHtml;
+        }
     }
 };
 
@@ -1162,7 +1195,24 @@ function checkShareLink() {
             const decodedJsonStr = decodeURIComponent(escape(atob(base64Str)));
             const data = JSON.parse(decodedJsonStr);
             if (Array.isArray(data)) {
-                data.forEach(item => {
+                // 轉換與還原格式 (同時支援新舊格式)
+                const parsedData = data.map(item => {
+                    if (Array.isArray(item)) {
+                        // 新版緊湊陣列格式: [name, ratio, rate, account, scores]
+                        return {
+                            name: item[0],
+                            ratio: String(item[1]),
+                            rate: parseFloat(item[2]) || 0,
+                            account: item[3] || '',
+                            scores: Array.isArray(item[4]) ? item[4] : [0, 0, 0, 0, 0]
+                        };
+                    }
+                    // 舊版物件格式直接回傳
+                    return item;
+                });
+
+                // 補齊分數欄位確保系統安全
+                parsedData.forEach(item => {
                     if (!item.scores) {
                         item.scores = [0, 0, 0, 0, 0];
                     } else {
@@ -1174,7 +1224,8 @@ function checkShareLink() {
                         }
                     }
                 });
-                selectedCurrencies = data;
+                
+                selectedCurrencies = parsedData;
                 saveState();
                 showToast('已成功從雲端分享連結載入設定！');
                 

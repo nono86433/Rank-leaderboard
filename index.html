@@ -60,16 +60,21 @@
         }
 
         .calc-table {
-            border-collapse: collapse;
-            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            width: max-content;
+            table-layout: fixed;
             background: #1e293b;
             color: white;
             font-size: 13px;
+            border-top: 1px solid #334155;
+            border-left: 1px solid #334155;
         }
 
         .calc-table th,
         .calc-table td {
-            border: 1px solid #334155;
+            border-bottom: 1px solid #334155;
+            border-right: 1px solid #334155;
             padding: 8px;
             text-align: center;
             min-width: 80px;
@@ -109,31 +114,86 @@
             outline: none;
         }
 
+        /* 隱藏 Chrome, Edge, Safari 的數字輸入框上下箭頭 */
+        .score-input-main::-webkit-outer-spin-button,
+        .score-input-main::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        /* 隱藏 Firefox 的數字輸入框上下箭頭 */
+        .score-input-main[type=number] {
+            -moz-appearance: textfield;
+        }
+
         .action-bar {
             margin-top: 20px;
             display: flex;
             gap: 10px;
         }
 
-        /* 手動資料區 */
-        .manual-data-zone {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(30, 41, 59, 0.5);
-            border-radius: 10px;
-            border: 1px dashed #475569;
+        /* --- 凍結欄位相關樣式 --- */
+        .col-w-1 { width: 60px; min-width: 60px; max-width: 60px; }
+        .col-w-2 { width: 120px; min-width: 120px; max-width: 120px; }
+        .col-w-3 { width: 100px; min-width: 100px; max-width: 100px; }
+        .col-w-4 { width: 60px; min-width: 60px; max-width: 60px; }
+        .col-w-5 { width: 60px; min-width: 60px; max-width: 60px; }
+        .col-w-6 { width: 80px; min-width: 80px; max-width: 80px; }
+        .col-w-7 { width: 80px; min-width: 80px; max-width: 80px; }
+        .col-w-8 { width: 80px; min-width: 80px; max-width: 80px; }
+        .col-w-9 { width: 80px; min-width: 80px; max-width: 80px; }
+        .col-w-10 { width: 80px; min-width: 80px; max-width: 80px; }
+
+        /* 凍結欄位定位與 left 偏移值 */
+        .sticky-col-1 { position: sticky; left: 0px; }
+        .sticky-col-2 { position: sticky; left: 60px; }
+        .sticky-col-3 { position: sticky; left: 180px; }
+        .sticky-col-4 { position: sticky; left: 280px; }
+        .sticky-col-5 { position: sticky; left: 340px; }
+        .sticky-col-6 { position: sticky; left: 400px; }
+        .sticky-col-7 { position: sticky; left: 480px; }
+        .sticky-col-8 { position: sticky; left: 560px; }
+        .sticky-col-9 { position: sticky; left: 640px; }
+        .sticky-col-10 { position: sticky; left: 720px; }
+
+        /* 凍結欄位在表身的樣式 (Td) */
+        td.sticky-col-1, td.sticky-col-2, td.sticky-col-3, td.sticky-col-4, td.sticky-col-5,
+        td.sticky-col-6, td.sticky-col-7, td.sticky-col-8, td.sticky-col-9, td.sticky-col-10 {
+            z-index: 2;
+            background: #1e293b !important;
         }
 
-        #csvDataInput {
-            width: 100%;
-            height: 60px;
-            background: #0f172a;
-            border: 1px solid #334155;
-            color: #94a3b8;
-            font-size: 11px;
-            padding: 8px;
-            border-radius: 6px;
-            margin-top: 8px;
+        /* 凍結欄位在 hover 時的背景變亮 */
+        tr:hover td.sticky-col-1, tr:hover td.sticky-col-2, tr:hover td.sticky-col-3, tr:hover td.sticky-col-4, tr:hover td.sticky-col-5,
+        tr:hover td.sticky-col-6, tr:hover td.sticky-col-7, tr:hover td.sticky-col-8, tr:hover td.sticky-col-9, tr:hover td.sticky-col-10 {
+            background: #273549 !important;
+        }
+
+        /* 第一排大表頭凍結 */
+        .sticky-header-group-1 {
+            position: sticky;
+            left: 0px;
+            z-index: 12 !important;
+            background: #1d4ed8 !important;
+            width: 400px;
+            min-width: 400px;
+            max-width: 400px;
+        }
+        .sticky-header-group-2 {
+            position: sticky;
+            left: 400px;
+            z-index: 12 !important;
+            background: #be185d !important;
+            width: 400px;
+            min-width: 400px;
+            max-width: 400px;
+        }
+
+        /* 第二排小表頭凍結 */
+        th.sticky-col-1, th.sticky-col-2, th.sticky-col-3, th.sticky-col-4, th.sticky-col-5,
+        th.sticky-col-6, th.sticky-col-7, th.sticky-col-8, th.sticky-col-9, th.sticky-col-10 {
+            z-index: 10 !important;
+            background: #0f172a !important;
         }
     </style>
 </head>
@@ -156,15 +216,6 @@
                 <div style="text-align: center; padding: 20px; color: #64748b;">請同步或貼入資料</div>
             </div>
 
-            <div class="manual-data-zone">
-                <div style="font-size: 0.75rem; color: #94a3b8; display: flex; justify-content: space-between;">
-                    <span>同步失敗？手動貼入 CSV</span>
-                    <button onclick="handleManualPaste()"
-                        style="background: none; border: none; color: #8b5cf6; cursor: pointer;">匯入</button>
-                </div>
-                <textarea id="csvDataInput" placeholder="在此貼入試算表匯出的內容..."></textarea>
-            </div>
-
             <button id="syncBtn" class="btn btn-ghost" style="width: 100%; margin-top: 15px; font-size: 0.8rem;">
                 同步最新資料
             </button>
@@ -172,28 +223,35 @@
 
             <!-- 右側主功能表格 -->
             <main class="main-table-area">
-                <header style="margin-bottom: 20px;">
-                    <h1 style="font-size: 1.25rem;">多幣別贏分換算排行榜</h1>
+                <header style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
+                    <h1 style="font-size: 1.25rem; margin: 0;">多幣別贏分換算排行榜</h1>
+                    <button id="toggleEditModeBtn" onclick="toggleEditMode()" class="btn btn-ghost" style="padding: 6px 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                        </svg>
+                        <span>手動編輯匯率</span>
+                    </button>
                 </header>
 
                 <div style="overflow-x: auto;">
                     <table class="calc-table">
                         <thead>
                             <tr id="tableHeaderRow1">
-                                <th colspan="5" class="bg-blue">幣別資訊</th>
-                                <th colspan="4" class="bg-pink">累積積分及遊戲 (請填寫贏分)</th>
+                                <th colspan="5" class="sticky-header-group-1">幣別資訊</th>
+                                <th colspan="5" class="sticky-header-group-2">累積積分及遊戲 (請填寫贏分)</th>
                                 <th id="leaderboardHeader" colspan="1" class="bg-green">排行榜換算區</th>
                             </tr>
                             <tr id="tableHeaderRow2">
-                                <th style="width: 60px;">排名</th>
-                                <th style="min-width: 120px;">押注帳號</th>
-                                <th style="min-width: 100px;">押注幣別</th>
-                                <th>ratio</th>
-                                <th>rate</th>
-                                <th>分數 1</th>
-                                <th>分數 2</th>
-                                <th>分數 3</th>
-                                <th>分數 4</th>
+                                <th class="sticky-col-1 col-w-1">排名</th>
+                                <th class="sticky-col-2 col-w-2">押注帳號</th>
+                                <th class="sticky-col-3 col-w-3">押注幣別</th>
+                                <th class="sticky-col-4 col-w-4">ratio</th>
+                                <th class="sticky-col-5 col-w-5">rate</th>
+                                <th class="sticky-col-6 col-w-6">分數 1</th>
+                                <th class="sticky-col-7 col-w-7">分數 2</th>
+                                <th class="sticky-col-8 col-w-8">分數 3</th>
+                                <th class="sticky-col-9 col-w-9">分數 4</th>
+                                <th class="sticky-col-10 col-w-10">分數 5</th>
                                 <!-- 動態生成的排行榜欄位會在這裡 -->
                             </tr>
                         </thead>
@@ -206,6 +264,12 @@
                 <div class="action-bar">
                     <button onclick="clearAllScores()" class="btn btn-ghost">清空贏分</button>
                     <button onclick="clearAllCurrencies()" class="btn btn-ghost" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.5);">清空所有幣別</button>
+                    <button onclick="generateShareLink()" class="btn btn-ghost" style="color: #10b981; border-color: rgba(16, 185, 129, 0.5); display: flex; align-items: center; gap: 5px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>
+                        </svg>
+                        產生分享連結
+                    </button>
                     <button onclick="sortLeaderboard()" class="btn btn-primary">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">

@@ -812,6 +812,19 @@ const DEFAULT_CURRENCIES = [
 // State Management
 let allCurrencies = [...DEFAULT_CURRENCIES];
 let selectedCurrencies = JSON.parse(localStorage.getItem('selected_test_currencies') || '[]');
+selectedCurrencies.forEach(item => {
+    if (!item.scores) {
+        item.scores = [0, 0, 0, 0, 0];
+    } else {
+        while (item.scores.length < 5) {
+            item.scores.push(0);
+        }
+        if (item.scores.length > 5) {
+            item.scores = item.scores.slice(0, 5);
+        }
+    }
+});
+let isEditMode = false;
 
 // DOM Elements
 const syncBtn = document.getElementById('syncBtn');
@@ -821,10 +834,10 @@ const calcTableBody = document.getElementById('calcTableBody');
 const tableHeaderRow2 = document.getElementById('tableHeaderRow2');
 const leaderboardHeader = document.getElementById('leaderboardHeader');
 const toast = document.getElementById('toast');
-const csvDataInput = document.getElementById('csvDataInput');
 
 // --- Initialization ---
 function init() {
+    checkShareLink();
     renderSelectionList();
     renderMainTable();
     
@@ -919,75 +932,6 @@ function fetchData() {
     document.body.appendChild(script);
 }
 
-window.handleManualPaste = () => {
-    const rawData = csvDataInput.value.trim();
-    if (rawData) {
-        processCSV(rawData);
-        csvDataInput.value = '';
-    }
-};
-
-function processCSV(csv) {
-    const lines = csv.split(/\r?\n/);
-    const parsedData = [];
-    
-    const parseLine = (text) => {
-        const result = [];
-        let col = '';
-        let inQuote = false;
-        for (let i = 0; i < text.length; i++) {
-            const char = text[i];
-            if (char === '"' && text[i+1] === '"') {
-                col += '"';
-                i++;
-            } else if (char === '"') {
-                inQuote = !inQuote;
-            } else if (char === ',' && !inQuote) {
-                result.push(col);
-                col = '';
-            } else {
-                col += char;
-            }
-        }
-        result.push(col);
-        return result;
-    };
-
-    lines.forEach((line, index) => {
-        if (index === 0 || !line.trim()) return;
-        const cells = parseLine(line);
-        if (cells.length >= 9) {
-            const name = cells[2]?.trim();
-            const ratio = cells[7]?.trim();
-            const rate = cells[8]?.trim();
-            if (name && name !== 'name' && (ratio || rate)) {
-                parsedData.push({ name, ratio: ratio || '1', rate: parseFloat(rate) || 0 });
-            }
-        }
-    });
-    if (parsedData.length > 0) {
-        allCurrencies = parsedData;
-        renderSelectionList();
-        
-        // 更新目前已選取的幣別，讓右邊的計算表也能同步到最新匯率
-        let hasUpdates = false;
-        selectedCurrencies.forEach(selected => {
-            const latest = parsedData.find(c => c.name === selected.name);
-            if (latest) {
-                if (selected.ratio !== latest.ratio || selected.rate !== latest.rate) {
-                    selected.ratio = latest.ratio;
-                    selected.rate = latest.rate;
-                    hasUpdates = true;
-                }
-            }
-        });
-        
-        if (hasUpdates) {
-            saveState();
-            renderMainTable();
-        }
-    }
-}
 
 // --- Rendering Selection List ---
 function renderSelectionList(data = allCurrencies) {
@@ -1016,17 +960,11 @@ window.addCurrencyToTable = (name) => {
     selectedCurrencies.push({
         ...currency,
         account: '',
-        scores: [0, 0, 0, 0]
+        scores: [0, 0, 0, 0, 0]
     });
     
     saveState();
     renderMainTable();
-
-    // 自動聚焦到新一行的第一個分數輸入框
-    setTimeout(() => {
-        const inputs = document.querySelectorAll(`#row-${newIdx} .score-input-main`);
-        if (inputs.length > 0) inputs[0].focus();
-    }, 50);
 };
 
 window.removeCurrencyFromTable = (index) => {
@@ -1055,10 +993,10 @@ function renderMainTable() {
         const baseValue = totalScore * item.rate;
         const rank = rankMap[rowIdx];
         
-        let rankHtml = `<td style="color: #cbd5e1; font-weight: bold;">${rank}</td>`;
-        if (rank === 1 && baseValue > 0) rankHtml = `<td style="color: #fbbf24; font-weight: bold;">🏆 1</td>`;
-        else if (rank === 2 && baseValue > 0) rankHtml = `<td style="color: #94a3b8; font-weight: bold;">🥈 2</td>`;
-        else if (rank === 3 && baseValue > 0) rankHtml = `<td style="color: #b45309; font-weight: bold;">🥉 3</td>`;
+        let rankHtml = `<td class="sticky-col-1 col-w-1" style="color: #cbd5e1; font-weight: bold;">${rank}</td>`;
+        if (rank === 1 && baseValue > 0) rankHtml = `<td class="sticky-col-1 col-w-1" style="color: #fbbf24; font-weight: bold;">🏆 1</td>`;
+        else if (rank === 2 && baseValue > 0) rankHtml = `<td class="sticky-col-1 col-w-1" style="color: #94a3b8; font-weight: bold;">🥈 2</td>`;
+        else if (rank === 3 && baseValue > 0) rankHtml = `<td class="sticky-col-1 col-w-1" style="color: #b45309; font-weight: bold;">🥉 3</td>`;
         
         const leaderboardCols = selectedCurrencies.map(target => {
             const converted = target.rate !== 0 ? (baseValue / target.rate).toFixed(3) : '0.000';
@@ -1068,15 +1006,15 @@ function renderMainTable() {
         return `
             <tr id="row-${rowIdx}">
                 ${rankHtml}
-                <td><input type="text" class="score-input" style="width: 100px;" value="${item.account || ''}" placeholder="帳號..." onchange="updateAccount(${rowIdx}, this.value)"></td>
-                <td style="background: #0f172a; position: relative; font-weight: 700;">
+                <td class="sticky-col-2 col-w-2"><input type="text" class="score-input" style="width: 100px;" value="${item.account || ''}" placeholder="帳號..." onchange="updateAccount(${rowIdx}, this.value)"></td>
+                <td class="sticky-col-3 col-w-3" style="position: sticky; font-weight: 700;">
                     <span style="cursor: pointer; color: #ef4444; position: absolute; left: 5px; top: 50%; transform: translateY(-50%);" onclick="removeCurrencyFromTable(${rowIdx})">×</span>
                     ${item.name}
                 </td>
-                <td>${item.ratio}</td>
-                <td>${item.rate}</td>
+                <td class="sticky-col-4 col-w-4">${isEditMode ? `<input type="text" class="score-input" style="width: 50px; font-size: 12px; padding: 2px 4px;" value="${item.ratio}" onchange="updateRatio(${rowIdx}, this.value)">` : item.ratio}</td>
+                <td class="sticky-col-5 col-w-5">${isEditMode ? `<input type="number" step="any" class="score-input score-input-main" style="width: 50px; font-size: 12px; padding: 2px 4px;" value="${item.rate}" onchange="updateRate(${rowIdx}, this.value)">` : item.rate}</td>
                 ${item.scores.map((score, scoreIdx) => `
-                    <td><input type="number" class="score-input score-input-main" value="${score || ''}" onchange="updateScore(${rowIdx}, ${scoreIdx}, this.value)" style="border: 1px solid #6366f1;"></td>
+                    <td class="sticky-col-${6 + scoreIdx} col-w-${6 + scoreIdx}"><input type="number" class="score-input score-input-main" value="${score || ''}" onchange="updateScore(${rowIdx}, ${scoreIdx}, this.value)" style="border: 1px solid #6366f1; width: 64px;"></td>
                 `).join('')}
                 ${leaderboardCols}
             </tr>
@@ -1085,7 +1023,7 @@ function renderMainTable() {
 }
 
 function updateHeaders() {
-    const staticHeaderCount = 9;
+    const staticHeaderCount = 10;
     while (tableHeaderRow2.cells.length > staticHeaderCount) {
         tableHeaderRow2.deleteCell(staticHeaderCount);
     }
@@ -1111,8 +1049,47 @@ window.updateScore = (rowIdx, scoreIdx, value) => {
     renderMainTable();
 };
 
+window.updateRatio = (rowIdx, value) => {
+    selectedCurrencies[rowIdx].ratio = value;
+    saveState();
+    renderMainTable();
+};
+
+window.updateRate = (rowIdx, value) => {
+    selectedCurrencies[rowIdx].rate = parseFloat(value) || 0;
+    saveState();
+    renderMainTable();
+};
+
+window.toggleEditMode = () => {
+    isEditMode = !isEditMode;
+    const btn = document.getElementById('toggleEditModeBtn');
+    if (btn) {
+        if (isEditMode) {
+            btn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 6L9 17l-5-5"/>
+                </svg>
+                <span>完成編輯</span>
+            `;
+            btn.classList.add('btn-primary');
+            btn.classList.remove('btn-ghost');
+        } else {
+            btn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+                <span>手動編輯匯率</span>
+            `;
+            btn.classList.add('btn-ghost');
+            btn.classList.remove('btn-primary');
+        }
+    }
+    renderMainTable();
+};
+
 window.clearAllScores = () => {
-    selectedCurrencies.forEach(item => { item.scores = [0, 0, 0, 0]; });
+    selectedCurrencies.forEach(item => { item.scores = [0, 0, 0, 0, 0]; });
     saveState();
     renderMainTable();
     showToast('已清空所有贏分');
@@ -1146,6 +1123,69 @@ function showToast(msg) {
     toast.innerText = msg;
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+window.generateShareLink = () => {
+    if (selectedCurrencies.length === 0) {
+        showToast('請先加入幣別後再產生分享連結');
+        return;
+    }
+    try {
+        const jsonStr = JSON.stringify(selectedCurrencies);
+        const base64Str = btoa(unescape(encodeURIComponent(jsonStr)));
+        const baseUrl = window.location.href.split('#')[0];
+        const shareUrl = `${baseUrl}#share=${base64Str}`;
+        
+        navigator.clipboard.writeText(shareUrl).then(() => {
+            showToast('分享連結已複製到剪貼簿，快傳給其他人吧！');
+        }).catch(err => {
+            console.error('無法複製連結:', err);
+            const input = document.createElement('input');
+            input.value = shareUrl;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            showToast('分享連結已複製！');
+        });
+    } catch (e) {
+        console.error('產生分享連結失敗:', e);
+        showToast('產生分享連結失敗，請重試');
+    }
+};
+
+function checkShareLink() {
+    const hash = window.location.hash;
+    if (hash && hash.startsWith('#share=')) {
+        try {
+            const base64Str = hash.substring(7);
+            const decodedJsonStr = decodeURIComponent(escape(atob(base64Str)));
+            const data = JSON.parse(decodedJsonStr);
+            if (Array.isArray(data)) {
+                data.forEach(item => {
+                    if (!item.scores) {
+                        item.scores = [0, 0, 0, 0, 0];
+                    } else {
+                        while (item.scores.length < 5) {
+                            item.scores.push(0);
+                        }
+                        if (item.scores.length > 5) {
+                            item.scores = item.scores.slice(0, 5);
+                        }
+                    }
+                });
+                selectedCurrencies = data;
+                saveState();
+                showToast('已成功從雲端分享連結載入設定！');
+                
+                const cleanUrl = window.location.href.split('#')[0];
+                window.history.replaceState(null, document.title, cleanUrl);
+            }
+        } catch (e) {
+            console.error('解析分享連結失敗:', e);
+            showToast('分享連結解析失敗，請確認網址是否完整');
+        }
+    }
 }
 
 init();

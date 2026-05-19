@@ -3,6 +3,11 @@ const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1bgy4owByRpPaw0VUzx6FI
 // 內建預設幣別資料 (以防同步失敗)
 const DEFAULT_CURRENCIES = [
   {
+    "name": "WinBet",
+    "ratio": "1",
+    "rate": 1
+  },
+  {
     "name": "CNY",
     "ratio": "1",
     "rate": 4.6
@@ -824,6 +829,16 @@ selectedCurrencies.forEach(item => {
         }
     }
 });
+// 確保 WinBet 一定存在於 selectedCurrencies 中
+if (!selectedCurrencies.some(c => c.name === 'WinBet')) {
+    selectedCurrencies.unshift({
+        name: 'WinBet',
+        ratio: '1',
+        rate: 1,
+        account: '',
+        scores: [0, 0, 0, 0, 0]
+    });
+}
 let isEditMode = false;
 
 // DOM Elements
@@ -880,6 +895,14 @@ window.google = {
                 });
                 
                 if (parsedData.length > 0) {
+                    // 確保 WinBet 也在 parsedData 中，以防同步後消失
+                    if (!parsedData.some(c => c.name === 'WinBet')) {
+                        parsedData.unshift({
+                            name: 'WinBet',
+                            ratio: '1',
+                            rate: 1
+                        });
+                    }
                     allCurrencies = parsedData;
                     renderSelectionList();
                     
@@ -951,11 +974,6 @@ window.addCurrencyToTable = (name) => {
     const currency = allCurrencies.find(c => c.name === name);
     if (!currency) return;
     
-    if (selectedCurrencies.some(c => c.name === name)) {
-        showToast(`${name} 已在表格中`);
-        return;
-    }
-    
     const newIdx = selectedCurrencies.length;
     selectedCurrencies.push({
         ...currency,
@@ -968,13 +986,27 @@ window.addCurrencyToTable = (name) => {
 };
 
 window.removeCurrencyFromTable = (index) => {
+    if (selectedCurrencies[index] && selectedCurrencies[index].name === 'WinBet') {
+        showToast('固定幣別 WinBet 不能被刪除');
+        return;
+    }
     selectedCurrencies.splice(index, 1);
     saveState();
     renderMainTable();
 };
 
 function renderMainTable() {
-    updateHeaders();
+    // 取得不重複的已加入幣別清單，用於渲染排行榜換算區的欄位
+    const uniqueSelectedCurrencies = [];
+    const seen = new Set();
+    selectedCurrencies.forEach(c => {
+        if (!seen.has(c.name)) {
+            seen.add(c.name);
+            uniqueSelectedCurrencies.push(c);
+        }
+    });
+
+    updateHeaders(uniqueSelectedCurrencies);
     
     const itemsWithValue = selectedCurrencies.map((item, idx) => {
         const totalScore = item.scores.reduce((a, b) => a + b, 0);
@@ -998,17 +1030,20 @@ function renderMainTable() {
         else if (rank === 2 && baseValue > 0) rankHtml = `<td class="sticky-col-1 col-w-1" style="color: #94a3b8; font-weight: bold;">🥈 2</td>`;
         else if (rank === 3 && baseValue > 0) rankHtml = `<td class="sticky-col-1 col-w-1" style="color: #b45309; font-weight: bold;">🥉 3</td>`;
         
-        const leaderboardCols = selectedCurrencies.map(target => {
+        const leaderboardCols = uniqueSelectedCurrencies.map(target => {
             const converted = target.rate !== 0 ? (baseValue / target.rate).toFixed(3) : '0.000';
             return `<td>${converted}</td>`;
         }).join('');
         
+        const rowClass = rank % 2 === 0 ? 'row-even' : 'row-odd';
+        const deleteButton = item.name === 'WinBet' ? '' : `<span style="cursor: pointer; color: #ef4444; position: absolute; left: 5px; top: 50%; transform: translateY(-50%);" onclick="removeCurrencyFromTable(${rowIdx})">×</span>`;
+
         return `
-            <tr id="row-${rowIdx}">
+            <tr id="row-${rowIdx}" class="${rowClass}">
                 ${rankHtml}
                 <td class="sticky-col-2 col-w-2"><input type="text" class="score-input" style="width: 100px;" value="${item.account || ''}" placeholder="帳號..." onchange="updateAccount(${rowIdx}, this.value)"></td>
                 <td class="sticky-col-3 col-w-3" style="position: sticky; font-weight: 700;">
-                    <span style="cursor: pointer; color: #ef4444; position: absolute; left: 5px; top: 50%; transform: translateY(-50%);" onclick="removeCurrencyFromTable(${rowIdx})">×</span>
+                    ${deleteButton}
                     ${item.name}
                 </td>
                 <td class="sticky-col-4 col-w-4">${isEditMode ? `<input type="text" class="score-input" style="width: 50px; font-size: 12px; padding: 2px 4px;" value="${item.ratio}" onchange="updateRatio(${rowIdx}, this.value)">` : item.ratio}</td>
@@ -1022,20 +1057,20 @@ function renderMainTable() {
     }).join('');
 }
 
-function updateHeaders() {
+function updateHeaders(uniqueCurrencies) {
     const staticHeaderCount = 10;
     while (tableHeaderRow2.cells.length > staticHeaderCount) {
         tableHeaderRow2.deleteCell(staticHeaderCount);
     }
     
-    selectedCurrencies.forEach(c => {
+    uniqueCurrencies.forEach(c => {
         const th = document.createElement('th');
         th.className = 'bg-green';
         th.innerText = `${c.name}榜`;
         tableHeaderRow2.appendChild(th);
     });
     
-    leaderboardHeader.colSpan = selectedCurrencies.length || 1;
+    leaderboardHeader.colSpan = uniqueCurrencies.length || 1;
 }
 
 window.updateAccount = (rowIdx, value) => {
@@ -1097,10 +1132,25 @@ window.clearAllScores = () => {
 
 window.clearAllCurrencies = () => {
     if (confirm('確定要清空所有已加入的幣別嗎？這將會清除所有的帳號與分數紀錄。')) {
-        selectedCurrencies = [];
+        // 保留 WinBet 並且重設其帳號和分數，其他幣別清除
+        selectedCurrencies = selectedCurrencies.filter(c => c.name === 'WinBet');
+        if (selectedCurrencies.length === 0) {
+            selectedCurrencies.push({
+                name: 'WinBet',
+                ratio: '1',
+                rate: 1,
+                account: '',
+                scores: [0, 0, 0, 0, 0]
+            });
+        } else {
+            selectedCurrencies.forEach(c => {
+                c.account = '';
+                c.scores = [0, 0, 0, 0, 0];
+            });
+        }
         saveState();
         renderMainTable();
-        showToast('已清空所有幣別');
+        showToast('已清空其他幣別，保留固定幣別 WinBet');
     }
 };
 
@@ -1224,6 +1274,17 @@ function checkShareLink() {
                         }
                     }
                 });
+                
+                // 確保 WinBet 一定存在於 selectedCurrencies 中
+                if (!parsedData.some(c => c.name === 'WinBet')) {
+                    parsedData.unshift({
+                        name: 'WinBet',
+                        ratio: '1',
+                        rate: 1,
+                        account: '',
+                        scores: [0, 0, 0, 0, 0]
+                    });
+                }
                 
                 selectedCurrencies = parsedData;
                 saveState();

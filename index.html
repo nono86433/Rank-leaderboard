@@ -83,32 +83,33 @@
         }
 
         .sidebar-toggle:hover {
-            background-color: #8b5cf6;
-            color: white;
-            border-color: #8b5cf6;
-            box-shadow: 4px 0 15px rgba(139, 92, 246, 0.4);
+            background-color: #334155;
+            color: #f8fafc;
+            border-color: #475569;
+            box-shadow: 4px 0 12px rgba(0, 0, 0, 0.3);
         }
 
         .sidebar-toggle svg {
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* 當側邊欄收合時，按鈕完全移至螢幕最左邊，並且底色變為顯眼的紫色發光狀態 */
+        /* 當側邊欄收合時，按鈕完全移至螢幕最左邊，並維持與版面相符的極簡灰色風格 */
         .app-container.sidebar-collapsed .sidebar-toggle {
             left: 0px;
             transform: translate(0, -50%);
-            border-left: 1px solid #8b5cf6;
-            border-color: #8b5cf6;
-            background-color: #8b5cf6;
-            color: white;
+            border-left: 1px solid #334155;
+            border-color: #334155;
+            background-color: #1e293b;
+            color: #94a3b8;
             border-radius: 0 16px 16px 0;
-            box-shadow: 4px 0 20px rgba(139, 92, 246, 0.5);
+            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.2);
         }
 
         .app-container.sidebar-collapsed .sidebar-toggle:hover {
-            background-color: #7c3aed;
-            border-color: #7c3aed;
-            box-shadow: 4px 0 25px rgba(124, 58, 237, 0.6);
+            background-color: #334155;
+            border-color: #475569;
+            color: #f8fafc;
+            box-shadow: 4px 0 12px rgba(0, 0, 0, 0.3);
         }
 
         .app-container.sidebar-collapsed .sidebar-toggle svg {

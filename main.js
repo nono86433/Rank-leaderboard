@@ -1196,7 +1196,7 @@ function renderMainTable() {
         }).join('');
         
         const rowClass = rank % 2 === 0 ? 'row-even' : 'row-odd';
-        const deleteButton = `<span style="cursor: pointer; color: #ef4444; position: absolute; left: 5px; top: 50%; transform: translateY(-50%);" onclick="removeCurrencyFromTable(${rowIdx})">×</span>`;
+        const deleteButton = `<span class="delete-currency-btn" style="cursor: pointer; color: #ef4444; position: absolute; left: 5px; top: 50%; transform: translateY(-50%);" onclick="removeCurrencyFromTable(${rowIdx})">×</span>`;
 
         return `
             <tr id="row-${rowIdx}" class="${rowClass}">

@@ -816,7 +816,17 @@ const DEFAULT_CURRENCIES = [
 
 // State Management
 let allCurrencies = [...DEFAULT_CURRENCIES];
-let selectedCurrencies = JSON.parse(localStorage.getItem('selected_test_currencies') || '[]');
+let selectedCurrencies = JSON.parse(localStorage.getItem('selected_test_currencies'));
+if (selectedCurrencies === null) {
+    selectedCurrencies = [{
+        name: 'WinBet',
+        ratio: '1',
+        rate: 1,
+        account: '',
+        scores: [0, 0, 0, 0, 0]
+    }];
+}
+
 selectedCurrencies.forEach(item => {
     if (!item.scores) {
         item.scores = [0, 0, 0, 0, 0];
@@ -829,16 +839,6 @@ selectedCurrencies.forEach(item => {
         }
     }
 });
-// 確保 WinBet 一定存在於 selectedCurrencies 中
-if (!selectedCurrencies.some(c => c.name === 'WinBet')) {
-    selectedCurrencies.unshift({
-        name: 'WinBet',
-        ratio: '1',
-        rate: 1,
-        account: '',
-        scores: [0, 0, 0, 0, 0]
-    });
-}
 let isEditMode = false;
 let draggedRow = null;
 let activeFocusCell = null;
@@ -1150,10 +1150,6 @@ window.addCurrencyToTable = (name) => {
 };
 
 window.removeCurrencyFromTable = (index) => {
-    if (selectedCurrencies[index] && selectedCurrencies[index].name === 'WinBet') {
-        showToast('固定幣別 WinBet 不能被刪除');
-        return;
-    }
     selectedCurrencies.splice(index, 1);
     saveState();
     renderMainTable();
@@ -1200,7 +1196,7 @@ function renderMainTable() {
         }).join('');
         
         const rowClass = rank % 2 === 0 ? 'row-even' : 'row-odd';
-        const deleteButton = item.name === 'WinBet' ? '' : `<span style="cursor: pointer; color: #ef4444; position: absolute; left: 5px; top: 50%; transform: translateY(-50%);" onclick="removeCurrencyFromTable(${rowIdx})">×</span>`;
+        const deleteButton = `<span style="cursor: pointer; color: #ef4444; position: absolute; left: 5px; top: 50%; transform: translateY(-50%);" onclick="removeCurrencyFromTable(${rowIdx})">×</span>`;
 
         return `
             <tr id="row-${rowIdx}" class="${rowClass}">

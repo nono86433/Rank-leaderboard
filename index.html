@@ -58,22 +58,25 @@
             left: 320px;
             top: 50%;
             transform: translate(-50%, -50%);
-            width: 20px;
-            height: 60px;
+            width: 28px;
+            height: 80px;
             background-color: #1e293b;
             color: #94a3b8;
             border: 1px solid #334155;
             border-left: none;
-            border-radius: 0 10px 10px 0;
+            border-radius: 0 12px 12px 0;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             z-index: 99;
             transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
                         background-color 0.2s,
                         color 0.2s,
-                        border-left 0.3s;
+                        border-radius 0.3s,
+                        border-color 0.3s,
+                        box-shadow 0.3s;
             box-shadow: 4px 0 10px rgba(0, 0, 0, 0.2);
             outline: none;
             padding: 0;
@@ -82,16 +85,30 @@
         .sidebar-toggle:hover {
             background-color: #8b5cf6;
             color: white;
+            border-color: #8b5cf6;
+            box-shadow: 4px 0 15px rgba(139, 92, 246, 0.4);
         }
 
         .sidebar-toggle svg {
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        /* 當側邊欄收合時，按鈕完全移至螢幕最左邊，並且底色變為顯眼的紫色發光狀態 */
         .app-container.sidebar-collapsed .sidebar-toggle {
             left: 0px;
-            border-left: 1px solid #334155;
-            background-color: #0f172a;
+            transform: translate(0, -50%);
+            border-left: 1px solid #8b5cf6;
+            border-color: #8b5cf6;
+            background-color: #8b5cf6;
+            color: white;
+            border-radius: 0 16px 16px 0;
+            box-shadow: 4px 0 20px rgba(139, 92, 246, 0.5);
+        }
+
+        .app-container.sidebar-collapsed .sidebar-toggle:hover {
+            background-color: #7c3aed;
+            border-color: #7c3aed;
+            box-shadow: 4px 0 25px rgba(124, 58, 237, 0.6);
         }
 
         .app-container.sidebar-collapsed .sidebar-toggle svg {

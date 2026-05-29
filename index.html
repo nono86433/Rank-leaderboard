@@ -12,20 +12,90 @@
     <style>
         /* 特殊樣式補充 */
         .app-container {
-            display: grid;
-            grid-template-columns: 320px 1fr;
+            display: flex;
             gap: 24px;
             height: 100vh;
             width: 100%;
             flex: 1;
             background: #0f172a;
+            position: relative;
+            transition: gap 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .app-container.sidebar-collapsed {
+            gap: 0;
         }
 
         .sidebar {
-            width: auto !important;
-            border-right: none !important;
+            width: 320px !important;
+            flex-shrink: 0;
+            background-color: var(--sidebar-bg);
             box-shadow: 4px 0 15px rgba(0, 0, 0, 0.2);
-            min-height: 0; /* 讓 grid item 可以縮小，觸發內部捲動 */
+            min-height: 0; /* 讓 flex item 可以縮小，觸發內部捲動 */
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            z-index: 10;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        border-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            border-right: 1px solid var(--border-color) !important;
+        }
+
+        .sidebar.collapsed {
+            width: 0 !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            opacity: 0;
+            border-right: none !important;
+        }
+
+        /* 側邊欄縮放按鈕樣式 */
+        .sidebar-toggle {
+            position: absolute;
+            left: 320px;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 60px;
+            background-color: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            border-left: none;
+            border-radius: 0 10px 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 99;
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        background-color 0.2s,
+                        color 0.2s,
+                        border-left 0.3s;
+            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.2);
+            outline: none;
+            padding: 0;
+        }
+
+        .sidebar-toggle:hover {
+            background-color: #8b5cf6;
+            color: white;
+        }
+
+        .sidebar-toggle svg {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .app-container.sidebar-collapsed .sidebar-toggle {
+            left: 0px;
+            border-left: 1px solid #334155;
+            background-color: #0f172a;
+        }
+
+        .app-container.sidebar-collapsed .sidebar-toggle svg {
+            transform: rotate(180deg);
         }
 
         .leaderboard-list {
@@ -51,12 +121,18 @@
         }
 
         .main-table-area {
+            flex: 1;
             padding: 24px;
             overflow: auto;
             background: #1e293b;
             margin: 24px 24px 24px 0;
             border-radius: 16px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .app-container.sidebar-collapsed .main-table-area {
+            margin-left: 24px;
         }
 
         .calc-table {
@@ -233,13 +309,51 @@
         tr.row-odd:hover td, tr.row-even:hover td {
             background: #273549 !important;
         }
+
+        /* 手動拖曳排序樣式 (僅在手動編輯匯率模式下啟用) */
+        .app-container.edit-mode .drag-handle {
+            cursor: grab;
+            user-select: none;
+            position: relative;
+        }
+
+        .app-container.edit-mode .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .app-container.edit-mode .drag-handle::before {
+            content: '⋮⋮';
+            font-size: 11px;
+            color: #475569;
+            margin-right: 6px;
+            display: inline-block;
+            vertical-align: middle;
+            opacity: 0.4;
+            transition: opacity 0.2s, color 0.2s;
+        }
+
+        .app-container.edit-mode tr:hover .drag-handle::before {
+            opacity: 1;
+            color: #8b5cf6;
+        }
+
+        tr.dragging {
+            opacity: 0.4;
+            background: #334155 !important;
+        }
+        
+        tr.dragging td {
+            background: #334155 !important;
+            border-top: 1px dashed #8b5cf6 !important;
+            border-bottom: 1px dashed #8b5cf6 !important;
+        }
     </style>
 </head>
 
 <body>
     <div class="app-container">
         <!-- 左側幣別清單 -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <h2 style="font-size: 1rem;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -258,6 +372,13 @@
                 同步最新資料
             </button>
         </aside>
+
+        <!-- 側邊欄縮放按鈕 -->
+        <button id="sidebarToggle" class="sidebar-toggle" onclick="toggleSidebar()" aria-label="收合側邊欄">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+        </button>
 
             <!-- 右側主功能表格 -->
             <main class="main-table-area">

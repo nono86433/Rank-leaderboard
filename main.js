@@ -840,6 +840,8 @@ if (!selectedCurrencies.some(c => c.name === 'WinBet')) {
     });
 }
 let isEditMode = false;
+let draggedRow = null;
+let activeFocusCell = null;
 
 // DOM Elements
 const syncBtn = document.getElementById('syncBtn');
@@ -856,6 +858,17 @@ function init() {
     renderSelectionList();
     renderMainTable();
     
+    // 初始化側邊欄縮放狀態
+    const sidebarCollapsed = localStorage.getItem('sidebar_collapsed') === 'true';
+    if (sidebarCollapsed) {
+        const sidebar = document.getElementById('sidebar');
+        const container = document.querySelector('.app-container');
+        const toggleBtn = document.getElementById('sidebarToggle');
+        if (sidebar) sidebar.classList.add('collapsed');
+        if (container) container.classList.add('sidebar-collapsed');
+        if (toggleBtn) toggleBtn.setAttribute('aria-label', '展開側邊欄');
+    }
+    
     syncBtn.addEventListener('click', fetchData);
     searchInput.addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase();
@@ -863,8 +876,159 @@ function init() {
         renderSelectionList(filtered);
     });
 
+    // 綁定手動拖曳排序事件 (事件委派至 calcTableBody)
+    calcTableBody.addEventListener('mousedown', (e) => {
+        const handle = e.target.closest('.drag-handle');
+        if (handle) {
+            const tr = handle.closest('tr');
+            if (tr) {
+                tr.setAttribute('draggable', 'true');
+            }
+        }
+    });
+
+    calcTableBody.addEventListener('dragstart', (e) => {
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+        draggedRow = tr;
+        tr.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', tr.id);
+    });
+
+    calcTableBody.addEventListener('dragend', (e) => {
+        if (draggedRow) {
+            draggedRow.classList.remove('dragging');
+            draggedRow.removeAttribute('draggable');
+            draggedRow = null;
+        }
+        updateOrderFromDOM();
+    });
+
+    calcTableBody.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (!draggedRow) return;
+        
+        const target = e.target.closest('tr');
+        if (!target || target === draggedRow) return;
+        
+        const rect = target.getBoundingClientRect();
+        const next = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
+        
+        calcTableBody.insertBefore(draggedRow, next ? target.nextSibling : target);
+    });
+
+    // 鍵盤導覽事件：按下 Enter 或方向鍵時，先同步數據、預設下一格焦點，再重繪表格（防止 DOM 重建造成焦點遺失）
+    calcTableBody.addEventListener('keydown', (e) => {
+        const input = e.target;
+        if (!input.classList.contains('score-input-main')) return;
+        
+        const rowAttr = input.getAttribute('data-row');
+        const colAttr = input.getAttribute('data-col');
+        if (rowAttr === null || colAttr === null) return;
+        
+        const row = parseInt(rowAttr);
+        const col = parseInt(colAttr);
+        
+        let nextRow = row;
+        let nextCol = col;
+        let shouldTriggerJump = false;
+        
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            nextCol = col + 1;
+            if (nextCol >= 5) {
+                nextCol = 0;
+                nextRow = row + 1;
+            }
+            shouldTriggerJump = true;
+        } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            nextCol = col + 1;
+            if (nextCol < 5) {
+                shouldTriggerJump = true;
+            }
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            nextCol = col - 1;
+            if (nextCol >= 0) {
+                shouldTriggerJump = true;
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            nextRow = row + 1;
+            shouldTriggerJump = true;
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            nextRow = row - 1;
+            shouldTriggerJump = true;
+        }
+        
+        if (shouldTriggerJump) {
+            // 1. 先將當前輸入框的值同步更新到 data model 中，避免 lost focus 時 change 未觸發
+            const val = parseFloat(input.value) || 0;
+            if (selectedCurrencies[row] && selectedCurrencies[row].scores) {
+                selectedCurrencies[row].scores[col] = val;
+            }
+            saveState();
+            
+            // 2. 判斷下一格是否存在
+            const nextExists = selectedCurrencies[nextRow] && selectedCurrencies[nextRow].scores && nextCol >= 0 && nextCol < 5;
+            if (nextExists) {
+                // 設定全域焦點目標，讓隨後的 renderMainTable() 自動套用焦點
+                activeFocusCell = { row: nextRow, col: nextCol, selectAll: true };
+            }
+            
+            // 3. 觸發重繪（重繪會自動依 activeFocusCell 進行焦點恢復與 select）
+            renderMainTable();
+        }
+    });
+
     // 背景嘗試同步最新資料
     fetchData();
+}
+
+window.toggleSidebar = (forceState = null) => {
+    const sidebar = document.getElementById('sidebar');
+    const container = document.querySelector('.app-container');
+    const toggleBtn = document.getElementById('sidebarToggle');
+    
+    let isCollapsed = sidebar.classList.contains('collapsed');
+    
+    if (forceState !== null) {
+        isCollapsed = !forceState;
+    }
+    
+    if (isCollapsed) {
+        // 展開側邊欄
+        sidebar.classList.remove('collapsed');
+        container.classList.remove('sidebar-collapsed');
+        if (toggleBtn) toggleBtn.setAttribute('aria-label', '收合側邊欄');
+        localStorage.setItem('sidebar_collapsed', 'false');
+    } else {
+        // 收合側邊欄
+        sidebar.classList.add('collapsed');
+        container.classList.add('sidebar-collapsed');
+        if (toggleBtn) toggleBtn.setAttribute('aria-label', '展開側邊欄');
+        localStorage.setItem('sidebar_collapsed', 'true');
+    }
+};
+
+function updateOrderFromDOM() {
+    const rows = Array.from(calcTableBody.querySelectorAll('tr'));
+    const newSelected = [];
+    
+    rows.forEach(row => {
+        const idParts = row.id.split('-');
+        const originalIdx = parseInt(idParts[1]);
+        if (!isNaN(originalIdx) && selectedCurrencies[originalIdx]) {
+            newSelected.push(selectedCurrencies[originalIdx]);
+        }
+    });
+    
+    selectedCurrencies = newSelected;
+    saveState();
+    renderMainTable();
 }
 
 // Google Visualization API JSONP Callback
@@ -1025,10 +1189,10 @@ function renderMainTable() {
         const baseValue = totalScore * item.rate;
         const rank = rankMap[rowIdx];
         
-        let rankHtml = `<td class="sticky-col-1 col-w-1" style="color: #cbd5e1; font-weight: bold;">${rank}</td>`;
-        if (rank === 1 && baseValue > 0) rankHtml = `<td class="sticky-col-1 col-w-1" style="color: #fbbf24; font-weight: bold;">🏆 1</td>`;
-        else if (rank === 2 && baseValue > 0) rankHtml = `<td class="sticky-col-1 col-w-1" style="color: #94a3b8; font-weight: bold;">🥈 2</td>`;
-        else if (rank === 3 && baseValue > 0) rankHtml = `<td class="sticky-col-1 col-w-1" style="color: #b45309; font-weight: bold;">🥉 3</td>`;
+        let rankHtml = `<td class="sticky-col-1 col-w-1 drag-handle" style="color: #cbd5e1; font-weight: bold;">${rank}</td>`;
+        if (rank === 1 && baseValue > 0) rankHtml = `<td class="sticky-col-1 col-w-1 drag-handle" style="color: #fbbf24; font-weight: bold;">🏆 1</td>`;
+        else if (rank === 2 && baseValue > 0) rankHtml = `<td class="sticky-col-1 col-w-1 drag-handle" style="color: #94a3b8; font-weight: bold;">🥈 2</td>`;
+        else if (rank === 3 && baseValue > 0) rankHtml = `<td class="sticky-col-1 col-w-1 drag-handle" style="color: #b45309; font-weight: bold;">🥉 3</td>`;
         
         const leaderboardCols = uniqueSelectedCurrencies.map(target => {
             const converted = target.rate !== 0 ? (baseValue / target.rate).toFixed(3) : '0.000';
@@ -1049,12 +1213,27 @@ function renderMainTable() {
                 <td class="sticky-col-4 col-w-4">${isEditMode ? `<input type="text" class="score-input" style="width: 50px; font-size: 12px; padding: 2px 4px;" value="${item.ratio}" onchange="updateRatio(${rowIdx}, this.value)">` : item.ratio}</td>
                 <td class="sticky-col-5 col-w-5">${isEditMode ? `<input type="number" step="any" class="score-input score-input-main" style="width: 50px; font-size: 12px; padding: 2px 4px;" value="${item.rate}" onchange="updateRate(${rowIdx}, this.value)">` : item.rate}</td>
                 ${item.scores.map((score, scoreIdx) => `
-                    <td class="sticky-col-${6 + scoreIdx} col-w-${6 + scoreIdx}"><input type="number" class="score-input score-input-main" value="${score || ''}" onchange="updateScore(${rowIdx}, ${scoreIdx}, this.value)" style="border: 1px solid #6366f1; width: 64px;"></td>
+                    <td class="sticky-col-${6 + scoreIdx} col-w-${6 + scoreIdx}"><input type="number" class="score-input score-input-main" data-row="${rowIdx}" data-col="${scoreIdx}" value="${score || ''}" onchange="updateScore(${rowIdx}, ${scoreIdx}, this.value)" style="border: 1px solid #6366f1; width: 64px;"></td>
                 `).join('')}
                 ${leaderboardCols}
             </tr>
         `;
     }).join('');
+    
+    // 如果有預設的焦點單元格，在此處恢復焦點與選取狀態
+    if (activeFocusCell) {
+        const targetCell = { ...activeFocusCell };
+        setTimeout(() => {
+            const inputToFocus = calcTableBody.querySelector(`.score-input-main[data-row="${targetCell.row}"][data-col="${targetCell.col}"]`);
+            if (inputToFocus) {
+                inputToFocus.focus();
+                if (targetCell.selectAll) {
+                    inputToFocus.select();
+                }
+            }
+        }, 30);
+        activeFocusCell = null; // 恢復後立即重設，防止不必要的重複聚焦
+    }
 }
 
 function updateHeaders(uniqueCurrencies) {
@@ -1079,7 +1258,9 @@ window.updateAccount = (rowIdx, value) => {
 };
 
 window.updateScore = (rowIdx, scoreIdx, value) => {
-    selectedCurrencies[rowIdx].scores[scoreIdx] = parseFloat(value) || 0;
+    const val = parseFloat(value) || 0;
+    if (selectedCurrencies[rowIdx].scores[scoreIdx] === val) return;
+    selectedCurrencies[rowIdx].scores[scoreIdx] = val;
     saveState();
     renderMainTable();
 };
@@ -1098,6 +1279,14 @@ window.updateRate = (rowIdx, value) => {
 
 window.toggleEditMode = () => {
     isEditMode = !isEditMode;
+    const container = document.querySelector('.app-container');
+    if (container) {
+        if (isEditMode) {
+            container.classList.add('edit-mode');
+        } else {
+            container.classList.remove('edit-mode');
+        }
+    }
     const btn = document.getElementById('toggleEditModeBtn');
     if (btn) {
         if (isEditMode) {
@@ -1132,25 +1321,17 @@ window.clearAllScores = () => {
 
 window.clearAllCurrencies = () => {
     if (confirm('確定要清空所有已加入的幣別嗎？這將會清除所有的帳號與分數紀錄。')) {
-        // 保留 WinBet 並且重設其帳號和分數，其他幣別清除
-        selectedCurrencies = selectedCurrencies.filter(c => c.name === 'WinBet');
-        if (selectedCurrencies.length === 0) {
-            selectedCurrencies.push({
-                name: 'WinBet',
-                ratio: '1',
-                rate: 1,
-                account: '',
-                scores: [0, 0, 0, 0, 0]
-            });
-        } else {
-            selectedCurrencies.forEach(c => {
-                c.account = '';
-                c.scores = [0, 0, 0, 0, 0];
-            });
-        }
+        // 只保留唯一一個全新的 WinBet，清空其他所有幣別與多餘的 WinBet
+        selectedCurrencies = [{
+            name: 'WinBet',
+            ratio: '1',
+            rate: 1,
+            account: '',
+            scores: [0, 0, 0, 0, 0]
+        }];
         saveState();
         renderMainTable();
-        showToast('已清空其他幣別，保留固定幣別 WinBet');
+        showToast('已清空所有幣別，僅保留單一 WinBet');
     }
 };
 
